@@ -1,0 +1,38 @@
+name: anker_ble_monitor
+description: "Bluetooth LE battery monitor and low charge alarm for Anker 767"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # BLE робота з пристроями
+  flutter_blue_plus: ^2.3.12
+
+  # Фоновий сервіс Android (щоб зв'язок не переривався при закритому екрані)
+  flutter_foreground_task: ^10.0.0
+
+  # Програвання системного аларму / гучного звуку
+  audioplayers: ^6.0.0
+
+  # Запит дозволів (Bluetooth, Локація, Сповіщення)
+  permission_handler: ^13.0.1
+
+  # Збереження налаштувань (порогу спрацювання % та MAC-адреси)
+  shared_preferences: ^2.2.3
+  
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/audio/alarm_clock.ogg
