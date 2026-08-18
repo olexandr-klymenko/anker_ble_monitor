@@ -2,7 +2,8 @@ name: anker_ble_monitor
 description: "Bluetooth LE battery monitor and low charge alarm for Anker 767"
 publish_to: 'none'
 
-version: 1.0.0+1
+# Було: version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -36,3 +37,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/audio/alarm_clock.ogg
+    - assets/audio/full_charge.ogg

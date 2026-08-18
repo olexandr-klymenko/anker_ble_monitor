@@ -1,17 +1,68 @@
-# anker_ble_monitor
+# AnkerAlert (Anker BLE Monitor) 🔋⚡
 
-A new Flutter project.
+Оптимізований Flutter-додаток для фонового моніторингу стану заряду та живлення зарядних станцій Anker PowerHouse (767 / F2000) через Bluetooth Low Energy (BLE).
 
-## Getting Started
+Додаток призначений для автоматичного сповіщення про необхідність увімкнення або вимкнення генератора/мережевого живлення.
 
-This project is a starting point for a Flutter application.
+---
 
-A few resources to get you started if this is your first Flutter project:
+## 🚀 Основні можливості
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+* **Фоновий моніторинг (Android Foreground Service):** Додаток працює у фоновому режимі та не закривається системою при згортанні.
+* **Гнучкі сповіщення:**
+  * **Поріг розряду (Low Battery):** Звуковий сигнал при падінні заряду нижче встановленого порогу.
+  * **Повний заряд (Full Battery):** Окремий сигнал про досягнення макс. заряду під час живлення від мережі/генератора.
+  * **Автоматичне скасування:** Сигнал розряду миттєво вимикається при появі вхідної напруги (AC Input > 0 Вт).
+* **Динамічне керування у шторці Android:** Кнопка «Заглушити сигнал» з'являється у системному сповіщенні тільки під час звучання тривоги.
+* **Керування декількома пристроями:**
+  * Пошук та фільтрація лише станцій Anker поблизу.
+  * Збереження пристроїв у локальній пам'яті (SharedPreferences).
+  * Власні (кастомні) назви для кожної станції із збереженням оригінальної BLE-назви.
+* **Тимчасова призупинка (Snooze):** Можливість вимкнути звук на заданий час (3, 4, 5 хв). Зміна налаштувань, що скасовують умову тривоги, автоматично анулює паузу.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## 🛠️ Архітектура проєкту
+
+Код розділено за принципами Clean Architecture та Pub/Sub з'єднання між ізолятами:
+
+lib/
+├── events/
+│   └── isolate_pubsub.dart          # Pub/Sub потік даних між UI та Background Isolate
+├── services/
+│   ├── device_storage_service.dart   # Збереження та перейменування пристроїв
+│   ├── permission_service.dart       # Запит дозволів Bluetooth та сповіщень
+│   └── background_task_handler.dart  # Фоновий сервіс, BLE телеметрія та аудіоплеєр
+└── ui/
+    ├── device_scanner_dialog.dart    # Екран керування та сканування пристроїв
+    ├── settings_screen.dart          # Окремий екран налаштування порогів
+    └── home_screen.dart              # Головне вікно з даними телеметрії
+
+---
+
+## ⚙️ Встановлення та збірка
+
+### Вимоги:
+* Flutter SDK: >=3.3.0
+* Android: API level 21+ (Android 5.0+)
+
+### Збірка APK / AAB:
+
+1. Завантажити залежності:
+   flutter pub get
+
+2. Зібрати APK для GitHub Release:
+   flutter build apk --release
+
+3. Зібрати App Bundle для Google Play Console:
+   flutter build appbundle --release
+
+---
+
+## 📋 Changelog (v1.1.0)
+
+* 🏗 Рефакторинг: Повний перехід на модульну структуру та Pub/Sub взаємодію між ізолятами (IsolatePubSub).
+* 📱 Керування пристроями: Додано окремий екран сканування станцій Anker та можливість задавати власні імена.
+* ⚙️ Налаштування: Налаштування порогів та паузи винесено в окремий екран SettingsScreen.
+* 🔔 Smart Notifications: Кнопка глушіння у шторці Android з'являється лише у момент активності звукового сигналу.
+* ⚡ Автоматизація: Зміна налаштувань під час паузи автоматично оновлює стан шторки та анулює паузу, якщо тривога більше не актуальна.
