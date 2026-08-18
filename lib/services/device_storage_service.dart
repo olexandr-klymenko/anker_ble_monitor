@@ -12,7 +12,6 @@ class SavedDevice {
     String? customName,
   }) : customName = customName ?? originalName;
 
-  /// Назва для відображення в UI
   String get displayName => customName.isNotEmpty ? customName : originalName;
 
   Map<String, dynamic> toJson() => {
@@ -35,6 +34,11 @@ class SavedDevice {
 class DeviceStorageService {
   static const String _keyDevicesList = 'saved_anker_devices';
   static const String _keySelectedDeviceId = 'selected_anker_device_id';
+
+  // Ключі для збереження налаштувань порогів
+  static const String _keyLowThreshold = 'low_threshold';
+  static const String _keyFullThreshold = 'full_threshold';
+  static const String _keySnoozeMinutes = 'snooze_minutes';
 
   static Future<List<SavedDevice>> getSavedDevices() async {
     final prefs = await SharedPreferences.getInstance();
@@ -94,5 +98,26 @@ class DeviceStorageService {
   static Future<void> setSelectedDeviceId(String id) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keySelectedDeviceId, id);
+  }
+
+  // Збереження та читання порогів
+  static Future<Map<String, int>> getSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    return {
+      'lowThreshold': prefs.getInt(_keyLowThreshold) ?? 15,
+      'fullThreshold': prefs.getInt(_keyFullThreshold) ?? 100,
+      'snoozeMinutes': prefs.getInt(_keySnoozeMinutes) ?? 3,
+    };
+  }
+
+  static Future<void> saveSettings({
+    required int lowThreshold,
+    required int fullThreshold,
+    required int snoozeMinutes,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyLowThreshold, lowThreshold);
+    await prefs.setInt(_keyFullThreshold, fullThreshold);
+    await prefs.setInt(_keySnoozeMinutes, snoozeMinutes);
   }
 }

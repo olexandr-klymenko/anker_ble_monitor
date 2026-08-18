@@ -38,6 +38,9 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
       _savedDevices = devices;
       _selectedDeviceId =
           selectedId ?? (devices.isNotEmpty ? devices.first.id : null);
+      // Прибираємо зі списку сканування пристрої, які вже збережені
+      _scanResults.removeWhere(
+          (r) => _savedDevices.any((sd) => sd.id == r.device.remoteId.str));
     });
   }
 
@@ -58,8 +61,11 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
               .toLowerCase();
 
           bool isAnker = name.contains('anker') || name.contains('powerhouse');
+          bool isAlreadySaved =
+              _savedDevices.any((sd) => sd.id == r.device.remoteId.str);
 
           if (isAnker &&
+              !isAlreadySaved &&
               !_scanResults
                   .any((e) => e.device.remoteId == r.device.remoteId)) {
             _scanResults.add(r);

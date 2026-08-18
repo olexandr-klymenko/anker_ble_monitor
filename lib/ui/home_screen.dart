@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _loadStoredSettings();
     _initForegroundTask();
     _checkServiceStatus();
     _checkDeviceAndInit();
@@ -39,6 +40,15 @@ class _HomeScreenState extends State<HomeScreen> {
         _latestTelemetry = telemetry;
         _isAlarmRinging = telemetry.isAlarmRinging;
       });
+    });
+  }
+
+  Future<void> _loadStoredSettings() async {
+    final settings = await DeviceStorageService.getSettings();
+    setState(() {
+      _alarmThreshold = settings['lowThreshold']!;
+      _fullThreshold = settings['fullThreshold']!;
+      _snoozeMinutes = settings['snoozeMinutes']!;
     });
   }
 
@@ -90,6 +100,11 @@ class _HomeScreenState extends State<HomeScreen> {
         _fullThreshold = result['fullThreshold']!;
         _snoozeMinutes = result['snoozeMinutes']!;
       });
+      await DeviceStorageService.saveSettings(
+        lowThreshold: _alarmThreshold,
+        fullThreshold: _fullThreshold,
+        snoozeMinutes: _snoozeMinutes,
+      );
       _sendSettingsToTask();
     }
   }
@@ -205,7 +220,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Поточний вибраний пристрій
                   Card(
                     elevation: 2,
                     child: ListTile(
@@ -234,8 +248,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Віджет Статусу та Телеметрії
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     decoration: BoxDecoration(
@@ -295,30 +307,26 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: LinearProgressIndicator(
-                                value: _latestTelemetry!.soc / 100.0,
-                                minHeight: 12,
-                                backgroundColor: Colors.grey.shade800,
-                                color: _latestTelemetry!.soc <= _alarmThreshold
-                                    ? Colors.redAccent
-                                    : (_latestTelemetry!.soc >= _fullThreshold
-                                        ? Colors.greenAccent
-                                        : Colors.blueAccent),
-                              ),
+
+                            // Прогресбар з підтримкою анімації хвилі при зарядці
+                            ChargingProgressBar(
+                              soc: _latestTelemetry!.soc,
+                              isCharging: _latestTelemetry!.isCharging,
+                              lowThreshold: _alarmThreshold,
+                              fullThreshold: _fullThreshold,
                             ),
+
                             const SizedBox(height: 12),
                             if (_latestTelemetry!.isCharging)
-                              Row(
+                              const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.bolt,
+                                  Icon(Icons.bolt,
                                       color: Colors.amber, size: 20),
-                                  const SizedBox(width: 4),
+                                  SizedBox(width: 4),
                                   Text(
-                                    'Заряджається: ${_latestTelemetry!.acInWatts} Вт',
-                                    style: const TextStyle(
+                                    'Живлення підключено',
+                                    style: TextStyle(
                                       color: Colors.amber,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -349,8 +357,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Інформаційний блок з поточними значеннями налаштувань
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -362,10 +368,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                  'Низький: $_alarmThreshold% | Повний: $_fullThreshold%',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13)),
+                                'Низький: $_alarmThreshold% | Повний: $_fullThreshold%',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
                               const SizedBox(height: 4),
                               Text('Пауза: $_snoozeMinutes хв',
                                   style: const TextStyle(
@@ -383,7 +389,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange.shade800,
@@ -404,7 +409,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             fontSize: 15, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(height: 10),
-
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
@@ -422,7 +426,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             fontSize: 15, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(height: 10),
-
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.redAccent,
@@ -447,6 +450,138 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Віджет прогресбару з фіксованою довжиною відсотка та анімованою хвилею світла під час заряджання
+class ChargingProgressBar extends StatefulWidget {
+  final int soc;
+  final bool isCharging;
+  final int lowThreshold;
+  final int fullThreshold;
+
+  const ChargingProgressBar({
+    super.key,
+    required this.soc,
+    required this.isCharging,
+    required this.lowThreshold,
+    required this.fullThreshold,
+  });
+
+  @override
+  State<ChargingProgressBar> createState() => _ChargingProgressBarState();
+}
+
+class _ChargingProgressBarState extends State<ChargingProgressBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _waveController;
+
+  @override
+  void initState() {
+    super.initState();
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+
+    if (widget.isCharging) {
+      _waveController.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ChargingProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isCharging && !_waveController.isAnimating) {
+      _waveController.repeat();
+    } else if (!widget.isCharging && _waveController.isAnimating) {
+      _waveController.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _waveController.dispose();
+    super.dispose();
+  }
+
+  Color _getBarColor() {
+    if (widget.isCharging) return Colors.amber;
+    if (widget.soc <= widget.lowThreshold) return Colors.redAccent;
+    if (widget.soc >= widget.fullThreshold) return Colors.greenAccent;
+    return Colors.blueAccent;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double progress = (widget.soc.clamp(0, 100)) / 100.0;
+    final Color baseColor = _getBarColor();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        height: 12,
+        width: double.infinity,
+        color: Colors.grey.shade800,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double fillWidth = constraints.maxWidth * progress;
+
+            return Stack(
+              children: [
+                // 1. Кольорова смуга відповідно до відсотка заряду
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: fillWidth,
+                  height: double.infinity,
+                  color: baseColor,
+                ),
+
+                // 2. Хвиля світла, суворо обрізана за межами fillWidth
+                if (widget.isCharging && fillWidth > 0)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: fillWidth,
+                      height: double.infinity,
+                      child: Stack(
+                        children: [
+                          AnimatedBuilder(
+                            animation: _waveController,
+                            builder: (context, child) {
+                              final double wavePos =
+                                  (_waveController.value * (fillWidth + 60)) -
+                                      30;
+
+                              return Positioned(
+                                left: wavePos,
+                                top: 0,
+                                bottom: 0,
+                                width: 40,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Colors.white.withValues(alpha: 0.0),
+                                        Colors.white.withValues(alpha: 0.6),
+                                        Colors.white.withValues(alpha: 0.0),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
