@@ -24,20 +24,91 @@
 
 ## 🛠️ Архітектура проєкту
 
-Код розділено за принципами Clean Architecture та Pub/Sub з'єднання між ізолятами:
+Проблема зрозуміла: вкладені блоки коду всередині інших блоків зламали Markdown-парсер, через що заголовок перетворився на горизонтальний скрол-блок, а дерево файлів випало нагору і перенеслося пропорційним шрифтом без скролу.
 
+Найкраще рішення для `README.md` — розділити цей блок на **чистий Markdown-список з табуляцією** або використати **короткий моноширинний блок без довгих коментарів в один рядок** (щоб не виникав горизонтальний скрол).
+
+Ось два правильних варіанти для `README.md`:
+
+---
+
+### **Варіант 1: Маркований список (Рекомендований для GitHub/GitLab)**
+
+Він відображається ідеально на будь-яких пристроях і ніколи не ламає верстку.
+
+## 🛠 Архітектура проєкту
+
+Код побудовано за принципами Clean Architecture з поділом на шари (Data, Services, Presentation) та Pub/Sub з'єднанням між ізолятами:
+
+* **`lib/`**
+* **`models/`**
+* `anker_telemetry.dart` — модель даних телеметрії станції
+
+
+* **`services/`**
+* `background_task_handler.dart` — фоновий сервіс, BLE з'єднання та аудіосигнали
+* `device_storage_service.dart` — збереження пристроїв та порогів у SharedPreferences
+* `permission_service.dart` — запит дозволів Bluetooth, Location та Notifications
+* `telemetry_parser.dart` — модуль парсингу BLE-пакетів телеметрії
+
+
+* **`events/`**
+* `isolate_pubsub.dart` — Pub/Sub потік даних між UI та Background Isolate
+
+
+* **`ui/`**
+* `home_screen.dart` — головне вікно з адаптивним верстанням (Mobile/Tablet)
+* `device_scanner_dialog.dart` — керування збереженими пристроями та сканування BLE
+* `settings_screen.dart` — екран налаштування порогів та паузи
+* **`widgets/`**
+* `action_buttons.dart` — панель кнопок керування сервісом
+* `charging_progress_bar.dart` — прогресбар з анімованою хвилею світла
+* `device_card.dart` — картка вибраного пристрою
+* `telemetry_card.dart` — картка стану заряду та мережевого живлення
+
+
+
+
+
+
+
+---
+
+### **Варіант 2: Компактне дерево без довгих рядків**
+
+Якщо хочеться саме «дерево файлів», опис виноситься під назви файлів або робиться максимально коротким, щоб уникнути переносу рядків.
+
+## 🛠 Архітектура проєкту
+
+Код побудовано за принципами Clean Architecture з поділом на шари та Pub/Sub з'єднанням між ізолятами:
+
+```
 lib/
-├── events/
-│   └── isolate_pubsub.dart          # Pub/Sub потік даних між UI та Background Isolate
+├── models/
+│   └── anker_telemetry.dart
 ├── services/
-│   ├── device_storage_service.dart   # Збереження та перейменування пристроїв
-│   ├── permission_service.dart       # Запит дозволів Bluetooth та сповіщень
-│   └── background_task_handler.dart  # Фоновий сервіс, BLE телеметрія та аудіоплеєр
+│   ├── background_task_handler.dart
+│   ├── device_storage_service.dart
+│   ├── permission_service.dart
+│   └── telemetry_parser.dart
+├── events/
+│   └── isolate_pubsub.dart
 └── ui/
-    ├── device_scanner_dialog.dart    # Екран керування та сканування пристроїв
-    ├── settings_screen.dart          # Окремий екран налаштування порогів
-    └── home_screen.dart              # Головне вікно з даними телеметрії
+    ├── home_screen.dart
+    ├── device_scanner_dialog.dart
+    ├── settings_screen.dart
+    └── widgets/
+        ├── action_buttons.dart
+        ├── charging_progress_bar.dart
+        ├── device_card.dart
+        └── telemetry_card.dart
 
+```
+
+* **`models/`** — структури даних телеметрії
+* **`services/`** — фоновий сервіс, збереження порогів, дозволи та парсер BLE
+* **`events/`** — Pub/Sub зв'язок між UI та ізолятом
+* **`ui/`** — адаптивні екрани (Mobile/Tablet) та винесені UI-віджети
 ---
 
 ## ⚙️ Встановлення та збірка
