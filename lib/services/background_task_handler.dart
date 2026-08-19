@@ -4,7 +4,9 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../events/isolate_pubsub.dart';
+import '../models/anker_telemetry.dart';
 import 'device_storage_service.dart';
+import 'telemetry_parser.dart';
 
 class AnkerBackgroundTaskHandler extends TaskHandler {
   int _currentThreshold = 15;
@@ -202,33 +204,26 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
     await c.setNotifyValue(true);
     _telemetrySub?.cancel();
     _telemetrySub = c.lastValueStream.listen((bytes) {
-      if (bytes.length >= 122) {
-        int soc = bytes[70];
-        _lastSoc = soc;
+      final parseResult = TelemetryParser.parse(bytes);
+      if (parseResult != null) {
+        _lastSoc = parseResult.soc;
+        _lastIsCharging = parseResult.isCharging;
 
-        // Перевірка наявності мережі живлення за прапором AC
-        int rawAcIn = bytes[18] | ((bytes[19] & 0xFF) << 8);
-        bool isChargingFromAC = rawAcIn > 10;
+        _checkAlarm(_lastSoc, _lastIsCharging);
 
-        _lastIsCharging = isChargingFromAC;
+        bool isAlarmRinging =
+            (_isLowAlarmActive || _isFullAlarmActive) && !_isSnoozed();
 
-        if (soc >= 0 && soc <= 100) {
-          _checkAlarm(soc, isChargingFromAC);
+        IsolatePubSub.publish(
+          AnkerTelemetry(
+            isAlarmRinging: isAlarmRinging,
+            soc: _lastSoc,
+            acInWatts: 0,
+            isCharging: _lastIsCharging,
+          ),
+        );
 
-          bool isAlarmRinging =
-              (_isLowAlarmActive || _isFullAlarmActive) && !_isSnoozed();
-
-          IsolatePubSub.publish(
-            AnkerTelemetry(
-              isAlarmRinging: isAlarmRinging,
-              soc: soc,
-              acInWatts: 0,
-              isCharging: isChargingFromAC,
-            ),
-          );
-
-          _updateNotificationStatus(soc, isChargingFromAC);
-        }
+        _updateNotificationStatus(_lastSoc, _lastIsCharging);
       }
     });
   }

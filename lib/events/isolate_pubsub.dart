@@ -1,35 +1,6 @@
 import 'dart:isolate';
 import 'dart:ui';
-
-class AnkerTelemetry {
-  final bool isAlarmRinging;
-  final int soc; // Відсоток заряду (0-100)
-  final int acInWatts; // Потужність заряджання Вт
-  final bool isCharging;
-
-  AnkerTelemetry({
-    required this.isAlarmRinging,
-    required this.soc,
-    required this.acInWatts,
-    required this.isCharging,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'isAlarmRinging': isAlarmRinging,
-        'soc': soc,
-        'acInWatts': acInWatts,
-        'isCharging': isCharging,
-      };
-
-  factory AnkerTelemetry.fromJson(Map<String, dynamic> json) {
-    return AnkerTelemetry(
-      isAlarmRinging: json['isAlarmRinging'] as bool? ?? false,
-      soc: json['soc'] as int? ?? -1,
-      acInWatts: json['acInWatts'] as int? ?? 0,
-      isCharging: json['isCharging'] as bool? ?? false,
-    );
-  }
-}
+import '../models/anker_telemetry.dart';
 
 class IsolatePubSub {
   static const String _portName = 'anker_alarm_port';

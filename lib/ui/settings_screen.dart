@@ -59,93 +59,115 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Налаштування порогів'),
         centerTitle: true,
+        toolbarHeight: 48,
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Поріг розряду (Low):',
-                              style: TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.w500)),
-                          DropdownButton<int>(
-                            value: _low,
-                            underline: const SizedBox(),
-                            items: _lowThresholdOptions
-                                .map((v) => DropdownMenuItem(
-                                    value: v, child: Text('$v%')))
-                                .toList(),
-                            onChanged: (v) =>
-                                v != null ? setState(() => _low = v) : null,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0, vertical: 8.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Поріг розряду (Low):',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500)),
+                                  DropdownButton<int>(
+                                    value: _low,
+                                    underline: const SizedBox(),
+                                    items: _lowThresholdOptions
+                                        .map((v) => DropdownMenuItem(
+                                            value: v, child: Text('$v%')))
+                                        .toList(),
+                                    onChanged: (v) => v != null
+                                        ? setState(() => _low = v)
+                                        : null,
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 12),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Сигнал заряду (Full):',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500)),
+                                  DropdownButton<int>(
+                                    value: _full,
+                                    underline: const SizedBox(),
+                                    items: _fullThresholdOptions
+                                        .map((v) => DropdownMenuItem(
+                                            value: v, child: Text('$v%')))
+                                        .toList(),
+                                    onChanged: (v) => v != null
+                                        ? setState(() => _full = v)
+                                        : null,
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 12),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Ручна призупинка:',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500)),
+                                  DropdownButton<int>(
+                                    value: _snooze,
+                                    underline: const SizedBox(),
+                                    items: _snoozeOptions
+                                        .map((v) => DropdownMenuItem(
+                                            value: v, child: Text('$v хв')))
+                                        .toList(),
+                                    onChanged: (v) => v != null
+                                        ? setState(() => _snooze = v)
+                                        : null,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                      const Divider(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Сигнал заряду (Full):',
-                              style: TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.w500)),
-                          DropdownButton<int>(
-                            value: _full,
-                            underline: const SizedBox(),
-                            items: _fullThresholdOptions
-                                .map((v) => DropdownMenuItem(
-                                    value: v, child: Text('$v%')))
-                                .toList(),
-                            onChanged: (v) =>
-                                v != null ? setState(() => _full = v) : null,
-                          ),
-                        ],
-                      ),
-                      const Divider(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Ручна призупинка:',
-                              style: TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.w500)),
-                          DropdownButton<int>(
-                            value: _snooze,
-                            underline: const SizedBox(),
-                            items: _snoozeOptions
-                                .map((v) => DropdownMenuItem(
-                                    value: v, child: Text('$v хв')))
-                                .toList(),
-                            onChanged: (v) =>
-                                v != null ? setState(() => _snooze = v) : null,
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: _saveAndPop,
+                    child: const Text('Зберегти налаштування',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
-              const Spacer(),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                onPressed: _saveAndPop,
-                child: const Text('Зберегти налаштування',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
+            ),
           ),
         ),
       ),
