@@ -4,10 +4,10 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch: # Дозволяє запускати збірку вручну з веб-інтерфейсу GitHub
+  workflow_dispatch:
 
 permissions:
-  contents: write # Надає права на створення GitHub Release та завантаження APK
+  contents: write
 
 jobs:
   build:
@@ -36,10 +36,14 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release
 
+      - name: Rename APK File
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/AnkerMonitor-${{ github.ref_name }}.apk
+
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: build/app/outputs/flutter-apk/AnkerMonitor-${{ github.ref_name }}.apk
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
