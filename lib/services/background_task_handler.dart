@@ -7,10 +7,10 @@ import '../events/isolate_pubsub.dart';
 import '../models/anker_telemetry.dart';
 import 'device_storage_service.dart';
 import 'telemetry_parser.dart';
+import '../services/alarm_evaluator.dart';
 
 class AnkerBackgroundTaskHandler extends TaskHandler {
-  int _currentThreshold = 15;
-  int _fullThreshold = 100;
+  final AlarmEvaluator _evaluator = AlarmEvaluator();
   int _snoozeDurationMinutes = 3;
   DateTime? _snoozeUntil;
 
@@ -24,8 +24,6 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
   StreamSubscription<BluetoothConnectionState>? _connStateSub;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isLowAlarmActive = false;
-  bool _isFullAlarmActive = false;
   bool _isConnecting = false;
 
   final List<int> _ankerAuthPayload = [
@@ -47,8 +45,8 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
     _targetDeviceId = await DeviceStorageService.getSelectedDeviceId();
 
     final settings = await DeviceStorageService.getSettings();
-    _currentThreshold = settings['lowThreshold']!;
-    _fullThreshold = settings['fullThreshold']!;
+    _evaluator.lowThreshold = settings['lowThreshold']!;
+    _evaluator.fullThreshold = settings['fullThreshold']!;
     _snoozeDurationMinutes = settings['snoozeMinutes']!;
 
     if (_targetDeviceId != null && _targetDeviceId!.isNotEmpty) {
@@ -69,11 +67,11 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
         }
       }
       if (data.containsKey('threshold') && data['threshold'] is int) {
-        _currentThreshold = data['threshold'] as int;
+        _evaluator.lowThreshold = data['threshold'] as int;
         settingsChanged = true;
       }
       if (data.containsKey('fullThreshold') && data['fullThreshold'] is int) {
-        _fullThreshold = data['fullThreshold'] as int;
+        _evaluator.fullThreshold = data['fullThreshold'] as int;
         settingsChanged = true;
       }
       if (data.containsKey('snoozeDuration') && data['snoozeDuration'] is int) {
@@ -125,25 +123,60 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
     return true;
   }
 
+  void _checkAlarm(int soc, bool isChargingFromAC) async {
+    final action = _evaluator.evaluate(
+      soc: soc,
+      isChargingFromAC: isChargingFromAC,
+      isSnoozed: _isSnoozed(),
+    );
+
+    switch (action) {
+      case AlarmAction.startFull:
+        _startAlarmRinging(
+          'Anker: $soc% (🔋 Заряджено!)',
+          'Досягнуто ${_evaluator.fullThreshold}%. Вимкніть генератор!',
+        );
+        await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+        await _audioPlayer.play(AssetSource('audio/full_charge.ogg'));
+        break;
+
+      case AlarmAction.startLow:
+        _startAlarmRinging(
+          'Anker: $soc% (⚠️ Низький заряд)',
+          'Низький заряд батареї (<= ${_evaluator.lowThreshold}%)!',
+        );
+        await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+        await _audioPlayer.play(AssetSource('audio/alarm_clock.ogg'));
+        break;
+
+      case AlarmAction.stop:
+        _stopAlarm();
+        _snoozeUntil = null;
+        break;
+
+      case AlarmAction.none:
+        break;
+    }
+  }
+
   void _updateNotificationStatus(int soc, bool isCharging) {
-    if (_isLowAlarmActive || _isFullAlarmActive) return;
+    if (_evaluator.isLowAlarmActive || _evaluator.isFullAlarmActive) return;
 
-    bool isLowAlarmCondition = soc <= _currentThreshold && !isCharging;
-    bool isFullAlarmCondition = soc >= _fullThreshold && isCharging;
-    bool isAlarmCondition = isLowAlarmCondition || isFullAlarmCondition;
-
-    if (isAlarmCondition && _isSnoozed()) {
+    if (_isSnoozed()) {
       int remainingMin = _snoozeUntil!.difference(DateTime.now()).inMinutes + 1;
-      String statusText = isCharging
-          ? '⚡ Досягнуто $_fullThreshold%. Звук заглушено на $remainingMin хв'
-          : '⚠️ Низький заряд (<= $_currentThreshold%). Звук заглушено на $remainingMin хв';
+      String statusText = soc >= _evaluator.fullThreshold
+          ? '⚡ Досягнуто ${_evaluator.fullThreshold}%. Звук заглушено на $remainingMin хв'
+          : '⚠️ Низький заряд (<= ${_evaluator.lowThreshold}%). Звук заглушено на $remainingMin хв';
 
       FlutterForegroundTask.updateService(
         notificationTitle: 'Anker: $soc% (🔕 Пауза)',
         notificationText: statusText,
         notificationButtons: [],
       );
-    } else if (isCharging) {
+      return;
+    }
+
+    if (isCharging) {
       FlutterForegroundTask.updateService(
         notificationTitle: 'Anker: $soc% (⚡ Заряджається)',
         notificationText: 'Живлення підключено.',
@@ -152,7 +185,8 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
     } else {
       FlutterForegroundTask.updateService(
         notificationTitle: 'Anker: $soc%',
-        notificationText: 'Заряд під контролем (поріг: $_currentThreshold%)',
+        notificationText:
+            'Заряд під контролем (поріг: ${_evaluator.lowThreshold}%)',
         notificationButtons: [],
       );
     }
@@ -212,7 +246,8 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
         _checkAlarm(_lastSoc, _lastIsCharging);
 
         bool isAlarmRinging =
-            (_isLowAlarmActive || _isFullAlarmActive) && !_isSnoozed();
+            (_evaluator.isLowAlarmActive || _evaluator.isFullAlarmActive) &&
+                !_isSnoozed();
 
         IsolatePubSub.publish(
           AnkerTelemetry(
@@ -241,50 +276,6 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
     }
   }
 
-  void _checkAlarm(int soc, bool isChargingFromAC) async {
-    if (soc >= _fullThreshold && isChargingFromAC) {
-      if (_isLowAlarmActive) _stopAlarm();
-
-      if (!_isFullAlarmActive && !_isSnoozed()) {
-        _isFullAlarmActive = true;
-        _startAlarmRinging('Anker: $soc% (🔋 Заряджено!)',
-            'Досягнуто $_fullThreshold%. Вимкніть генератор!');
-        await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-        await _audioPlayer.play(AssetSource('audio/full_charge.ogg'));
-      }
-      return;
-    } else {
-      if (_isFullAlarmActive) {
-        _stopAlarm();
-        _snoozeUntil = null;
-      }
-    }
-
-    if (isChargingFromAC) {
-      if (_isLowAlarmActive) {
-        _stopAlarm();
-        _snoozeUntil = null;
-      }
-      return;
-    }
-
-    if (soc <= _currentThreshold) {
-      if (!_isLowAlarmActive && !_isSnoozed()) {
-        _stopAlarm();
-        _isLowAlarmActive = true;
-        _startAlarmRinging('Anker: $soc% (⚠️ Низький заряд)',
-            'Низький заряд батареї (<= $_currentThreshold%)!');
-        await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-        await _audioPlayer.play(AssetSource('audio/alarm_clock.ogg'));
-      }
-    } else {
-      if (_isLowAlarmActive) {
-        _stopAlarm();
-        _snoozeUntil = null;
-      }
-    }
-  }
-
   void _startAlarmRinging(String title, String text) {
     FlutterForegroundTask.updateService(
       notificationTitle: title,
@@ -296,9 +287,8 @@ class AnkerBackgroundTaskHandler extends TaskHandler {
   }
 
   void _stopAlarm() async {
-    if (_isLowAlarmActive || _isFullAlarmActive) {
-      _isLowAlarmActive = false;
-      _isFullAlarmActive = false;
+    if (_evaluator.isLowAlarmActive || _evaluator.isFullAlarmActive) {
+      _evaluator.resetAll();
       await _audioPlayer.stop();
     }
   }

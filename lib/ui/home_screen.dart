@@ -193,15 +193,6 @@ class _HomeScreenState extends State<HomeScreen> {
           title: const Text('Anker 767 BLE Monitor'),
           centerTitle: true,
           toolbarHeight: 48,
-          actions: [
-            IconButton(
-              icon: Icon(
-                Icons.settings_bluetooth,
-                color: _isServiceRunning ? Colors.grey : Colors.white,
-              ),
-              onPressed: _isServiceRunning ? null : _openDeviceManager,
-            ),
-          ],
         ),
         body: SafeArea(
           child: Align(
