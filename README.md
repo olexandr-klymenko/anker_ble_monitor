@@ -22,93 +22,56 @@
 
 ---
 
-## 🛠️ Архітектура проєкту
-
-Проблема зрозуміла: вкладені блоки коду всередині інших блоків зламали Markdown-парсер, через що заголовок перетворився на горизонтальний скрол-блок, а дерево файлів випало нагору і перенеслося пропорційним шрифтом без скролу.
-
-Найкраще рішення для `README.md` — розділити цей блок на **чистий Markdown-список з табуляцією** або використати **короткий моноширинний блок без довгих коментарів в один рядок** (щоб не виникав горизонтальний скрол).
-
-Ось два правильних варіанти для `README.md`:
-
----
-
-### **Варіант 1: Маркований список (Рекомендований для GitHub/GitLab)**
-
-Він відображається ідеально на будь-яких пристроях і ніколи не ламає верстку.
-
 ## 🛠 Архітектура проєкту
 
-Код побудовано за принципами Clean Architecture з поділом на шари (Data, Services, Presentation) та Pub/Sub з'єднанням між ізолятами:
-
-* **`lib/`**
-* **`models/`**
-* `anker_telemetry.dart` — модель даних телеметрії станції
-
-
-* **`services/`**
-* `background_task_handler.dart` — фоновий сервіс, BLE з'єднання та аудіосигнали
-* `device_storage_service.dart` — збереження пристроїв та порогів у SharedPreferences
-* `permission_service.dart` — запит дозволів Bluetooth, Location та Notifications
-* `telemetry_parser.dart` — модуль парсингу BLE-пакетів телеметрії
-
-
-* **`events/`**
-* `isolate_pubsub.dart` — Pub/Sub потік даних між UI та Background Isolate
-
-
-* **`ui/`**
-* `home_screen.dart` — головне вікно з адаптивним верстанням (Mobile/Tablet)
-* `device_scanner_dialog.dart` — керування збереженими пристроями та сканування BLE
-* `settings_screen.dart` — екран налаштування порогів та паузи
-* **`widgets/`**
-* `action_buttons.dart` — панель кнопок керування сервісом
-* `charging_progress_bar.dart` — прогресбар з анімованою хвилею світла
-* `device_card.dart` — картка вибраного пристрою
-* `telemetry_card.dart` — картка стану заряду та мережевого живлення
-
-
-
-
-
-
-
----
-
-### **Варіант 2: Компактне дерево без довгих рядків**
-
-Якщо хочеться саме «дерево файлів», опис виноситься під назви файлів або робиться максимально коротким, щоб уникнути переносу рядків.
-
-## 🛠 Архітектура проєкту
-
-Код побудовано за принципами Clean Architecture з поділом на шари та Pub/Sub з'єднанням між ізолятами:
+Код розділений на шари так, щоб уся бізнес-логіка (коли саме дзвонить тривога, що написати в нотифікації) перевірялась юніт-тестами без реального BLE-стека чи платформних плагінів. UI-ізолят і фоновий `TaskHandler`-ізолят спілкуються через типізований IPC (`ipc/`), а не через довільні `Map`.
 
 ```
 lib/
-├── models/
-│   └── anker_telemetry.dart
+├── domain/                       — чиста бізнес-логіка, без Flutter/BLE-залежностей
+│   ├── alarm_controller.dart         — стейт-машина тривоги (коли дзвонити/глушити)
+│   ├── monitor_notification_builder.dart — текст нотифікації зі знімка AlarmEvaluation
+│   └── models/
+│       └── monitor_settings.dart     — value-object порогів і паузи
+│
+├── data/ble/                     — доступ до станції за інтерфейсом
+│   ├── anker_connection.dart         — абстракція (connect/telemetry/keepAlive)
+│   └── flutter_blue_anker_connection.dart — реалізація на flutter_blue_plus
+│
 ├── services/
-│   ├── background_task_handler.dart
-│   ├── device_storage_service.dart
-│   ├── permission_service.dart
-│   └── telemetry_parser.dart
-├── events/
-│   └── isolate_pubsub.dart
-└── ui/
-    ├── home_screen.dart
-    ├── device_scanner_dialog.dart
-    ├── settings_screen.dart
-    └── widgets/
-        ├── action_buttons.dart
-        ├── charging_progress_bar.dart
-        ├── device_card.dart
-        └── telemetry_card.dart
-
+│   ├── background_task_handler.dart  — тонкий TaskHandler, делегує до MonitorService
+│   ├── monitor_service.dart          — оркестрація: телеметрія → тривога → звук → нотифікація
+│   ├── alarm_audio.dart              — абстракція над AudioPlayer
+│   ├── monitor_notifier.dart         — абстракція над нотифікацією Android-сервісу
+│   ├── device_storage_service.dart   — збереження пристроїв і налаштувань (SharedPreferences)
+│   ├── permission_service.dart       — запит дозволів Bluetooth/Location/Notifications
+│   └── telemetry_parser.dart         — парсинг сирих BLE-пакетів телеметрії
+│
+├── ipc/                          — типізований зв'язок між UI- та фоновим ізолятом
+│   ├── monitor_command.dart          — команди UI → фон (SyncStateCommand, SnoozeCommand)
+│   └── telemetry_channel.dart        — потік телеметрії фон → UI
+│
+├── models/
+│   └── anker_telemetry.dart          — знімок телеметрії, що публікується в UI
+│
+├── ui/
+│   ├── home_screen.dart              — головний екран (Mobile/Tablet), без бізнес-логіки
+│   ├── monitor_view_model.dart       — стан екрана (ChangeNotifier), без BuildContext
+│   ├── device_scanner_dialog.dart    — керування збереженими пристроями та сканування BLE
+│   ├── settings_screen.dart          — екран налаштування порогів і паузи
+│   └── widgets/
+│       ├── action_buttons.dart       — панель кнопок керування сервісом
+│       ├── charging_progress_bar.dart— прогресбар з анімованою хвилею світла
+│       ├── device_card.dart          — картка вибраного пристрою
+│       └── telemetry_card.dart       — картка стану заряду та мережевого живлення
+│
+└── main.dart                     — точка входу UI-ізолята й фонового callback
 ```
 
-* **`models/`** — структури даних телеметрії
-* **`services/`** — фоновий сервіс, збереження порогів, дозволи та парсер BLE
-* **`events/`** — Pub/Sub зв'язок між UI та ізолятом
-* **`ui/`** — адаптивні екрани (Mobile/Tablet) та винесені UI-віджети
+**Потік даних:** `FlutterBlueAnkerConnection` отримує сирі байти → `TelemetryParser` розбирає їх → `MonitorService` прогонить результат крізь `AlarmController` (вирішує, чи дзвонити тривогу) → `AlarmAudio`/`MonitorNotifier` застосовують ефект → `TelemetryChannel` публікує знімок в UI-ізолят → `MonitorViewModel` оновлює `HomeScreen`. Зміни з UI (пороги, вибір пристрою, snooze) йдуть у зворотному напрямку через `MonitorCommand`.
+
+Кожен шар (`domain/`, `services/`, `ipc/`, `ui/`) покритий юніт-тестами з фейками замість реальних BLE/аудіо/нотифікаційних плагінів — структура `test/` дзеркалить `lib/` (`test/domain/`, `test/services/`, `test/ipc/`, `test/ui/`), плюс окрема `test/fakes/` зі спільними тестовими двійниками.
+
 ---
 
 ## ⚙️ Встановлення та збірка
@@ -130,9 +93,26 @@ lib/
 
 ---
 
-## 📋 Changelog (v1.1.0)
+## 📋 Changelog
 
-* 🏗 Рефакторинг: Повний перехід на модульну структуру та Pub/Sub взаємодію між ізолятами (IsolatePubSub).
+### v1.3.1
+
+* 🏗 Рефакторинг архітектури: бізнес-логіка тривоги (`AlarmController`) і побудова тексту нотифікацій (`MonitorNotificationBuilder`) винесені в незалежний від Flutter `domain/`-шар — усунуто дублювання, коли умова тривоги перевірялась і в фоновому сервісі, і в нотифікації окремо.
+* 🔌 BLE винесено за інтерфейс `AnkerConnection`: фоновий оркестратор `MonitorService` більше не залежить напряму від `flutter_blue_plus`, `AudioPlayer` чи `flutter_foreground_task` — усі підмінюються фейками в тестах.
+* 📡 Типізований IPC (`ipc/monitor_command.dart`, `ipc/telemetry_channel.dart`) замінив довільні `Map` між UI- та фоновим ізолятом; виправлено витік `ReceivePort`, що лишався зареєстрованим після закриття екрана.
+* 🖥 `HomeScreen` розвантажено в `MonitorViewModel` (`ChangeNotifier` без `BuildContext`) — стан екрана тепер тестується без побудови віджетів.
+* 🧹 Прибрано дублюючу кнопку `settings_bluetooth` в AppBar (та сама дія, що й «Змінити» на картці пристрою) і мертвий код: поле `acInWatts` з `AnkerTelemetry`, `PermissionService.isBluetoothEnabled()`, `MonitorSettings.copyWith()`, `AlarmController.isLowAlarmActive`/`isFullAlarmActive`-геттери; злито `service/` і `services/` в один каталог.
+* 🔢 Показ поточної версії застосунку у футері головного екрана (`package_info_plus`).
+* ✅ Юніт-тести на всі нові шари (`domain/`, `services/`, `ipc/`, `ui/monitor_view_model.dart`), включно з фейками для BLE/аудіо/нотифікацій і мокнутим `MethodChannel` для `flutter_foreground_task`; структура `test/` приведена у відповідність до `lib/`.
+
+### v1.2.0
+
+* 🔐 CI: налаштовано підпис релізних збірок (keystore, `key.properties`) та явний шлях до нього в GitHub Actions.
+* ✅ Тести: юніт-тести для `DeviceStorageService`, розширені edge-case тести для `TelemetryParser`; тестовий ранер інтегровано в реліз-workflow.
+
+### v1.1.0
+
+* 🏗 Рефакторинг: Повний перехід на модульну структуру та Pub/Sub взаємодію між ізолятами (IsolatePubSub, замінено на TelemetryChannel у v1.3.1).
 * 📱 Керування пристроями: Додано окремий екран сканування станцій Anker та можливість задавати власні імена.
 * ⚙️ Налаштування: Налаштування порогів та паузи винесено в окремий екран SettingsScreen.
 * 🔔 Smart Notifications: Кнопка глушіння у шторці Android з'являється лише у момент активності звукового сигналу.

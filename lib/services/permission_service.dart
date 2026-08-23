@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class PermissionService {
   /// Запит усіх необхідних дозволів для BLE, фонового сервісу та сповіщень
@@ -36,10 +35,4 @@ class PermissionService {
 
     return true;
   }
-
-/// Перевірка чи увімкнений Bluetooth
-static Future<bool> isBluetoothEnabled() async {
-  BluetoothAdapterState state = await FlutterBluePlus.adapterState.first;
-  return state == BluetoothAdapterState.on;
-}
 }

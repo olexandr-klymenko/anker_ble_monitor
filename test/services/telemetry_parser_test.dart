@@ -4,17 +4,19 @@ import 'package:anker_ble_monitor/services/telemetry_parser.dart';
 
 void main() {
   group('TelemetryParser Unit Tests', () {
-    test('Should return null when byte array length is less than 122', () {
-      final shortBytes = List<int>.filled(100, 0);
+    test('Should return null when byte array is shorter than minPacketLength',
+        () {
+      final shortBytes =
+          List<int>.filled(TelemetryParser.minPacketLength - 1, 0);
       final result = TelemetryParser.parse(shortBytes);
       expect(result, isNull);
     });
 
-    test('Should parse SOC percentage correctly from byte index 70', () {
+    test('Should parse SOC percentage correctly from socByteIndex', () {
       final bytes = List<int>.filled(125, 0);
-      bytes[70] = 85; // 85% SOC
-      bytes[18] = 0;  // No AC input
-      bytes[19] = 0;
+      bytes[TelemetryParser.socByteIndex] = 85; // 85% SOC
+      bytes[TelemetryParser.acInLowByteIndex] = 0; // No AC input
+      bytes[TelemetryParser.acInHighByteIndex] = 0;
 
       final result = TelemetryParser.parse(bytes);
 
@@ -23,12 +25,13 @@ void main() {
       expect(result.isCharging, isFalse);
     });
 
-    test('Should detect AC charging state when rawAcIn > 10', () {
+    test('Should detect AC charging state when rawAcIn > acInChargingThreshold',
+        () {
       final bytes = List<int>.filled(125, 0);
-      bytes[70] = 50;
-      // rawAcIn = bytes[18] | ((bytes[19] & 0xFF) << 8)
-      bytes[18] = 20; // > 10
-      bytes[19] = 0;
+      bytes[TelemetryParser.socByteIndex] = 50;
+      // rawAcIn = low | ((high & 0xFF) << 8)
+      bytes[TelemetryParser.acInLowByteIndex] = 20; // > acInChargingThreshold
+      bytes[TelemetryParser.acInHighByteIndex] = 0;
 
       final result = TelemetryParser.parse(bytes);
 
@@ -39,7 +42,7 @@ void main() {
 
     test('Should return null if SOC value is invalid (< 0 or > 100)', () {
       final bytes = List<int>.filled(125, 0);
-      bytes[70] = 105; // Invalid SOC > 100%
+      bytes[TelemetryParser.socByteIndex] = 105; // Invalid SOC > 100%
 
       final result = TelemetryParser.parse(bytes);
       expect(result, isNull);
@@ -51,7 +54,6 @@ void main() {
       final telemetry = AnkerTelemetry(
         isAlarmRinging: true,
         soc: 15,
-        acInWatts: 0,
         isCharging: false,
       );
 

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:anker_ble_monitor/domain/models/monitor_settings.dart';
 import 'package:anker_ble_monitor/services/device_storage_service.dart';
 
 void main() {
@@ -14,24 +15,22 @@ void main() {
     test('Should return default settings when nothing is saved', () async {
       final settings = await DeviceStorageService.getSettings();
 
-      expect(settings['lowThreshold'], equals(15));
-      expect(settings['fullThreshold'], equals(100));
-      expect(settings['snoozeMinutes'], equals(3));
+      expect(settings, equals(MonitorSettings.defaults));
     });
 
     test('Should save and retrieve custom threshold settings correctly',
         () async {
-      await DeviceStorageService.saveSettings(
+      await DeviceStorageService.saveSettings(const MonitorSettings(
         lowThreshold: 20,
         fullThreshold: 90,
         snoozeMinutes: 5,
-      );
+      ));
 
       final settings = await DeviceStorageService.getSettings();
 
-      expect(settings['lowThreshold'], equals(20));
-      expect(settings['fullThreshold'], equals(90));
-      expect(settings['snoozeMinutes'], equals(5));
+      expect(settings.lowThreshold, equals(20));
+      expect(settings.fullThreshold, equals(90));
+      expect(settings.snoozeMinutes, equals(5));
     });
 
     test('Should save, retrieve, and delete devices correctly', () async {

@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
+import '../domain/models/monitor_settings.dart';
 
 class SettingsScreen extends StatefulWidget {
-  final int lowThreshold;
-  final int fullThreshold;
-  final int snoozeMinutes;
+  final MonitorSettings settings;
 
-  const SettingsScreen({
-    super.key,
-    required this.lowThreshold,
-    required this.fullThreshold,
-    required this.snoozeMinutes,
-  });
+  const SettingsScreen({super.key, required this.settings});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -40,17 +34,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _low = widget.lowThreshold;
-    _full = widget.fullThreshold;
-    _snooze = widget.snoozeMinutes;
+    _low = widget.settings.lowThreshold;
+    _full = widget.settings.fullThreshold;
+    _snooze = widget.settings.snoozeMinutes;
   }
 
   void _saveAndPop() {
-    Navigator.of(context).pop({
-      'lowThreshold': _low,
-      'fullThreshold': _full,
-      'snoozeMinutes': _snooze,
-    });
+    Navigator.of(context).pop(MonitorSettings(
+      lowThreshold: _low,
+      fullThreshold: _full,
+      snoozeMinutes: _snooze,
+    ));
   }
 
   @override

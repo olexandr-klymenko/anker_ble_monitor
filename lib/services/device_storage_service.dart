@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../domain/models/monitor_settings.dart';
 
 class SavedDevice {
   final String id;
@@ -101,23 +102,22 @@ class DeviceStorageService {
   }
 
   // Збереження та читання порогів
-  static Future<Map<String, int>> getSettings() async {
+  static Future<MonitorSettings> getSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    return {
-      'lowThreshold': prefs.getInt(_keyLowThreshold) ?? 15,
-      'fullThreshold': prefs.getInt(_keyFullThreshold) ?? 100,
-      'snoozeMinutes': prefs.getInt(_keySnoozeMinutes) ?? 3,
-    };
+    return MonitorSettings(
+      lowThreshold:
+          prefs.getInt(_keyLowThreshold) ?? MonitorSettings.defaults.lowThreshold,
+      fullThreshold: prefs.getInt(_keyFullThreshold) ??
+          MonitorSettings.defaults.fullThreshold,
+      snoozeMinutes: prefs.getInt(_keySnoozeMinutes) ??
+          MonitorSettings.defaults.snoozeMinutes,
+    );
   }
 
-  static Future<void> saveSettings({
-    required int lowThreshold,
-    required int fullThreshold,
-    required int snoozeMinutes,
-  }) async {
+  static Future<void> saveSettings(MonitorSettings settings) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_keyLowThreshold, lowThreshold);
-    await prefs.setInt(_keyFullThreshold, fullThreshold);
-    await prefs.setInt(_keySnoozeMinutes, snoozeMinutes);
+    await prefs.setInt(_keyLowThreshold, settings.lowThreshold);
+    await prefs.setInt(_keyFullThreshold, settings.fullThreshold);
+    await prefs.setInt(_keySnoozeMinutes, settings.snoozeMinutes);
   }
 }

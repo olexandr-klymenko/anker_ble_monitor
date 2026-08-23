@@ -1,10 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import '../events/isolate_pubsub.dart';
-import '../models/anker_telemetry.dart';
-import '../services/device_storage_service.dart';
-import '../services/permission_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import '../domain/models/monitor_settings.dart';
+import 'monitor_view_model.dart';
 import '../main.dart' show startCallback;
 import 'device_scanner_dialog.dart';
 import 'settings_screen.dart';
@@ -20,168 +18,74 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _alarmThreshold = 15;
-  int _fullThreshold = 100;
-  int _snoozeMinutes = 3;
-  bool _isServiceRunning = false;
-  bool _isAlarmRinging = false;
-
-  SavedDevice? _selectedDevice;
-  AnkerTelemetry? _latestTelemetry;
-  late StreamSubscription<AnkerTelemetry> _isolateSubscription;
+  final MonitorViewModel _viewModel = MonitorViewModel();
+  bool _isLoading = true;
+  String _appVersion = '';
 
   @override
   void initState() {
     super.initState();
-    _loadStoredSettings();
-    _initForegroundTask();
-    _checkServiceStatus();
-    _checkDeviceAndInit();
-
-    _isolateSubscription = IsolatePubSub.subscribe().listen((telemetry) {
-      setState(() {
-        _latestTelemetry = telemetry;
-        _isAlarmRinging = telemetry.isAlarmRinging;
-      });
-    });
+    _viewModel.addListener(_onViewModelChanged);
+    _init();
+    _loadAppVersion();
   }
 
-  Future<void> _loadStoredSettings() async {
-    final settings = await DeviceStorageService.getSettings();
-    setState(() {
-      _alarmThreshold = settings['lowThreshold']!;
-      _fullThreshold = settings['fullThreshold']!;
-      _snoozeMinutes = settings['snoozeMinutes']!;
-    });
-  }
+  Future<void> _init() async {
+    await _viewModel.init();
+    setState(() => _isLoading = false);
 
-  @override
-  void dispose() {
-    _isolateSubscription.cancel();
-    super.dispose();
-  }
-
-  Future<void> _checkDeviceAndInit() async {
-    final selectedId = await DeviceStorageService.getSelectedDeviceId();
-    final devices = await DeviceStorageService.getSavedDevices();
-
-    if (selectedId == null || !devices.any((d) => d.id == selectedId)) {
+    if (_viewModel.selectedDevice == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openDeviceManager());
-    } else {
-      setState(() {
-        _selectedDevice = devices.firstWhere((d) => d.id == selectedId);
-      });
     }
   }
 
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = info.version);
+  }
+
+  void _onViewModelChanged() => setState(() {});
+
+  @override
+  void dispose() {
+    _viewModel.removeListener(_onViewModelChanged);
+    _viewModel.dispose();
+    super.dispose();
+  }
+
   Future<void> _openDeviceManager() async {
-    if (_isServiceRunning) return;
+    if (_viewModel.isServiceRunning) return;
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const DeviceManagerScreen()),
     );
-    _checkDeviceAndInit();
-    _sendSettingsToTask();
+    await _viewModel.refreshSelectedDevice();
   }
 
   Future<void> _openSettings() async {
-    final result = await Navigator.of(context).push<Map<String, int>>(
+    final result = await Navigator.of(context).push<MonitorSettings>(
       MaterialPageRoute(
-        builder: (context) => SettingsScreen(
-          lowThreshold: _alarmThreshold,
-          fullThreshold: _fullThreshold,
-          snoozeMinutes: _snoozeMinutes,
-        ),
+        builder: (context) => SettingsScreen(settings: _viewModel.settings),
       ),
     );
 
     if (result != null) {
-      setState(() {
-        _alarmThreshold = result['lowThreshold']!;
-        _fullThreshold = result['fullThreshold']!;
-        _snoozeMinutes = result['snoozeMinutes']!;
-      });
-      await DeviceStorageService.saveSettings(
-        lowThreshold: _alarmThreshold,
-        fullThreshold: _fullThreshold,
-        snoozeMinutes: _snoozeMinutes,
-      );
-      _sendSettingsToTask();
+      await _viewModel.updateSettings(result);
     }
   }
 
-  Future<void> _checkServiceStatus() async {
-    bool running = await FlutterForegroundTask.isRunningService;
-    setState(() => _isServiceRunning = running);
-  }
-
-  void _initForegroundTask() {
-    FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'anker_ble_channel',
-        channelName: 'Anker BLE Monitor',
-        channelDescription: 'Стеження за станом заряду Anker у фоні',
-        priority: NotificationPriority.LOW,
-      ),
-      iosNotificationOptions: const IOSNotificationOptions(),
-      foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(3000),
-        autoRunOnBoot: true,
-        allowWifiLock: false,
-      ),
-    );
-  }
-
   Future<void> _startService() async {
-    if (_selectedDevice == null) {
+    if (_viewModel.selectedDevice == null) {
       _openDeviceManager();
       return;
     }
 
-    if (!await PermissionService.requestAllPermissions()) return;
-
-    if (await FlutterForegroundTask.isRunningService) {
-      await FlutterForegroundTask.restartService();
-    } else {
-      await FlutterForegroundTask.startService(
-        serviceId: 257,
-        notificationTitle: 'Anker Monitor',
-        notificationText: 'Підключення до станції...',
-        callback: startCallback,
-      );
-    }
-
-    setState(() => _isServiceRunning = true);
-    _sendSettingsToTask();
-  }
-
-  void _sendSettingsToTask() {
-    if (_selectedDevice != null) {
-      FlutterForegroundTask.sendDataToTask({
-        'deviceId': _selectedDevice!.id,
-        'threshold': _alarmThreshold,
-        'fullThreshold': _fullThreshold,
-        'snoozeDuration': _snoozeMinutes,
-      });
-    }
-  }
-
-  Future<void> _snoozeAlarm() async {
-    FlutterForegroundTask.sendDataToTask({'action': 'snooze'});
-    setState(() => _isAlarmRinging = false);
-  }
-
-  Future<void> _stopService() async {
-    await FlutterForegroundTask.stopService();
-    setState(() {
-      _isServiceRunning = false;
-      _isAlarmRinging = false;
-      _latestTelemetry = null;
-    });
+    if (!await _viewModel.requestPermissions()) return;
+    await _viewModel.startService(startCallback);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_selectedDevice == null) {
+    if (_isLoading || _viewModel.selectedDevice == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -193,15 +97,6 @@ class _HomeScreenState extends State<HomeScreen> {
           title: const Text('Anker 767 BLE Monitor'),
           centerTitle: true,
           toolbarHeight: 48,
-          actions: [
-            IconButton(
-              icon: Icon(
-                Icons.settings_bluetooth,
-                color: _isServiceRunning ? Colors.grey : Colors.white,
-              ),
-              onPressed: _isServiceRunning ? null : _openDeviceManager,
-            ),
-          ],
         ),
         body: SafeArea(
           child: Align(
@@ -233,28 +128,29 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DeviceCard(
-            device: _selectedDevice!,
-            isServiceRunning: _isServiceRunning,
+            device: _viewModel.selectedDevice!,
+            isServiceRunning: _viewModel.isServiceRunning,
             onChange: _openDeviceManager,
           ),
           const SizedBox(height: 8),
           TelemetryCard(
-            isServiceRunning: _isServiceRunning,
-            telemetry: _latestTelemetry,
-            lowThreshold: _alarmThreshold,
-            fullThreshold: _fullThreshold,
+            isServiceRunning: _viewModel.isServiceRunning,
+            telemetry: _viewModel.latestTelemetry,
+            lowThreshold: _viewModel.settings.lowThreshold,
+            fullThreshold: _viewModel.settings.fullThreshold,
           ),
           const SizedBox(height: 8),
           _buildSettingsCard(),
           const SizedBox(height: 10),
           ActionButtons(
-            isServiceRunning: _isServiceRunning,
-            isAlarmRinging: _isAlarmRinging,
-            snoozeMinutes: _snoozeMinutes,
-            onSnooze: _snoozeAlarm,
+            isServiceRunning: _viewModel.isServiceRunning,
+            isAlarmRinging: _viewModel.isAlarmRinging,
+            snoozeMinutes: _viewModel.settings.snoozeMinutes,
+            onSnooze: _viewModel.snooze,
             onStartService: _startService,
-            onStopService: _stopService,
+            onStopService: _viewModel.stopService,
           ),
+          _buildVersionFooter(),
         ],
       ),
     );
@@ -270,17 +166,17 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DeviceCard(
-                device: _selectedDevice!,
-                isServiceRunning: _isServiceRunning,
+                device: _viewModel.selectedDevice!,
+                isServiceRunning: _viewModel.isServiceRunning,
                 onChange: _openDeviceManager,
               ),
               const SizedBox(height: 8),
               Expanded(
                 child: TelemetryCard(
-                  isServiceRunning: _isServiceRunning,
-                  telemetry: _latestTelemetry,
-                  lowThreshold: _alarmThreshold,
-                  fullThreshold: _fullThreshold,
+                  isServiceRunning: _viewModel.isServiceRunning,
+                  telemetry: _viewModel.latestTelemetry,
+                  lowThreshold: _viewModel.settings.lowThreshold,
+                  fullThreshold: _viewModel.settings.fullThreshold,
                 ),
               ),
             ],
@@ -297,18 +193,32 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildSettingsCard(),
                 const SizedBox(height: 8),
                 ActionButtons(
-                  isServiceRunning: _isServiceRunning,
-                  isAlarmRinging: _isAlarmRinging,
-                  snoozeMinutes: _snoozeMinutes,
-                  onSnooze: _snoozeAlarm,
+                  isServiceRunning: _viewModel.isServiceRunning,
+                  isAlarmRinging: _viewModel.isAlarmRinging,
+                  snoozeMinutes: _viewModel.settings.snoozeMinutes,
+                  onSnooze: _viewModel.snooze,
                   onStartService: _startService,
-                  onStopService: _stopService,
+                  onStopService: _viewModel.stopService,
                 ),
+                _buildVersionFooter(),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildVersionFooter() {
+    if (_appVersion.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Center(
+        child: Text(
+          'Anker BLE Monitor v$_appVersion',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+        ),
+      ),
     );
   }
 
@@ -323,12 +233,13 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Низький: $_alarmThreshold% | Повний: $_fullThreshold%',
+                  'Низький: ${_viewModel.settings.lowThreshold}% | '
+                  'Повний: ${_viewModel.settings.fullThreshold}%',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 const SizedBox(height: 2),
-                Text('Пауза: $_snoozeMinutes хв',
+                Text('Пауза: ${_viewModel.settings.snoozeMinutes} хв',
                     style: const TextStyle(color: Colors.grey, fontSize: 11)),
               ],
             ),
